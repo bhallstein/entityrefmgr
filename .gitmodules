@@ -1,0 +1,3 @@
+[submodule "SparseArray"]
+	path = SparseArray
+	url = git@github.com:bhallstein/SparseArray.git
