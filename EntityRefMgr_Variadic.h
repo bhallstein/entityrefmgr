@@ -2,13 +2,10 @@
 #define __EntityRefMgr_Variadic_h
 
 #include <tuple>
-#include "SparseArray.h"
-#include "StretchyArray.h"
-#include "StretchyArray_swapRemove.h"
 #include <type_traits>
-#include <cstdio>
-
-#define ENTITY_DOES_NOT_HAVE_THIS_COMPONENT -1
+#include <vector>
+#include "SparseArray.h"
+#include "swap_remove.h"
 
 
 // SameType template helper
@@ -33,16 +30,16 @@ class EntityRefMgr {
 public:
 	EntityRefMgr() : entity_component_indices(1) { }
 
+	static const size_t NotFound = -1;
+
 
 	// Add & remove entities
 	// -----------------------------------
 
-	int addEntity() {
-		// An entity is just an entry in the sparse array of ComponentIndicess
+	size_t addEntity() {
 		size_t e = entity_component_indices.push({});
-		
 		for (int i=0, n = sizeof...(Ts); i < n; ++i) {
-			entity_component_indices.v[e].indices[i] = ENTITY_DOES_NOT_HAVE_THIS_COMPONENT;
+			entity_component_indices.v[e].indices[i] = NotFound;
 		}
 		return e;
 	}
@@ -56,39 +53,56 @@ public:
 	// -----------------------------------
 
 	template <class C>
-	int addComponent(const C &c, int e) {
-		auto &arr = get_array<C>();
-		arr.push(c);
-		int i = arr.get_n() - 1;
+	size_t addComponent(const C &c, size_t e) {
+		auto &arr = get_component_array<C>();
+		arr.push_back(c);
+		size_t i = arr.size() - 1;
 		setComponentIndexForEntity<C>(e, i);
 		return i;
 	}
 
 	template <class C>
-	void removeComponent(int comp_index, int e) {
-		auto &arr = get_array<C>();
-		int ind_swapped = StretchyArray_swapRemove<C, uint16_t>(arr, comp_index);
-		setComponentIndexForEntity<C>(e, ENTITY_DOES_NOT_HAVE_THIS_COMPONENT);
-		if (ind_swapped != comp_index) {
-			setComponentIndexForEntity<C>(arr[comp_index].entity, comp_index);
+	void removeComponent(size_t e, size_t i) {
+		auto &v = get_component_array<C>();
+		size_t i__swapped = swap_remove<C>(v, i);
+		setComponentIndexForEntity<C>(e, NotFound);
+
+		if (i__swapped != i) {
+			setComponentIndexForEntity<C>(v[i__swapped].entity, i);
+		}
+	}
+
+	template <class C, class F>
+	void removeComponentsMulti(std::vector<size_t> indices, F f) {
+		auto &v = get_component_array<C>();
+
+		// Iteratively remove all components from a vector
+		// - reverse order, due to TightlyPackedArray constraints
+		// - end the behaviour tree for the entity
+		for (int j = (int)indices.size()-1; j >= 0; --j) {
+			size_t i = indices[j];
+			size_t entity = v[i].entity;
+
+			removeComponent<C>(entity, i);
+			f(entity);
 		}
 	}
 
 
-	// Get array, given component type
+	// Get a component array, given component type
 	// -----------------------------------
 
 	template<class C>
-	StretchyArray<C, uint16_t>& get_array() {
+	std::vector<C>& get_component_array() {
 		return Tuple_Iterate<0, C, Det_Tuple_Of_Vecs<0, C>::value>::get(vvv);
 	}
 
 
-	// Get index of array, given component type
+	// Get index of a component array, given component type
 	// -----------------------------------
 
 	template<class C>
-	int get_index() {
+	size_t get_index() {
 		return Tuple_Iterate<0, C, Det_Tuple_Of_Vecs<0, C>::value>::get_index(vvv);
 	}
 	
@@ -97,13 +111,13 @@ public:
 	// -----------------------------------
 
 	template<class C>
-	int componentIndexForEntity(int e) {
+	size_t componentIndexForEntity(size_t e) {
 		auto component_index = get_index<C>();
 		return entity_component_indices.v[e].indices[component_index];
 	}
 
 	template<class C>
-	void setComponentIndexForEntity(int e, int i) {
+	void setComponentIndexForEntity(size_t e, size_t i) {
 		auto component_index = get_index<C>();
 		auto &indices_for_entity = entity_component_indices.v[e];
 		indices_for_entity.indices[component_index] = i;
@@ -111,11 +125,11 @@ public:
 
 
 private:
-	typedef std::tuple<StretchyArray<Ts, uint16_t>...> vecs;
+	typedef std::tuple<std::vector<Ts>...> vecs;
 	vecs vvv;
 
 	struct ComponentIndices {
-		int indices[sizeof...(Ts)];
+		size_t indices[sizeof...(Ts)];
 	};
 	SparseArray<ComponentIndices> entity_component_indices;
 
@@ -123,24 +137,24 @@ private:
 	// Resolve array for given type at compile time
 	// -----------------------------------
 
-	template<int N, class U>
+	template<size_t N, class U>
 	struct Det_Tuple_Of_Vecs : SameType<U, typename std::tuple_element<N, vecs>::type::value_type> { };
 
-	template<int N, class C, bool Match>
+	template<size_t N, class C, bool Match>
 	struct Tuple_Iterate {
-		static StretchyArray<C, uint16_t>& get(vecs &w) {
+		static std::vector<C>& get(vecs &w) {
 			return Tuple_Iterate<N+1, C, Det_Tuple_Of_Vecs<N+1, C>::value>::get(w);
 		}
-		static int get_index(vecs &w) {
+		static size_t get_index(vecs &w) {
 			return Tuple_Iterate<N+1, C, Det_Tuple_Of_Vecs<N+1, C>::value>::get_index(w);
 		}
 	};
-	template<int N, class C>
+	template<size_t N, class C>
 	struct Tuple_Iterate<N, C, true> {
-		static StretchyArray<C, uint16_t>& get(vecs &w) {
+		static std::vector<C>& get(vecs &w) {
 			return std::get<N>(w);
 		}
-		static int get_index(vecs &w) {
+		static size_t get_index(vecs &w) {
 			return N;
 		}
 	};

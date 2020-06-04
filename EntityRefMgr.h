@@ -13,21 +13,20 @@
 #ifndef __EntityRefMgr_h
 #define __EntityRefMgr_h
 
-//#include "Components.h"
 #include "SparseArray.h"
-
-#define ENTITY_DOES_NOT_HAVE_THIS_COMPONENT -1
 
 typedef int ComponentIndexSet[Components::Count];
 
 class EntityRefMgr {
 public:
 	EntityRefMgr() : v(8) {  }
+
+	static const size_t NotFound -1;
 	
 	EntityRef addEntity() {
 		EntityRef e = v.addEntry();
 		for (int i=0; i < Components::Count; ++i) {
-			v[e][i] = ENTITY_DOES_NOT_HAVE_THIS_COMPONENT;
+			v[e][i] = NotFound;
 		}
 		printf("Added entity, now about %d of them\n", e);
 		return e;
