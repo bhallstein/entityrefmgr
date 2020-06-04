@@ -6,9 +6,13 @@
 #include "StretchyArray.h"
 #include "StretchyArray_swapRemove.h"
 #include <type_traits>
-
 #include <cstdio>
 
+#define ENTITY_DOES_NOT_HAVE_THIS_COMPONENT -1
+
+
+// SameType template helper
+// -----------------------------------
 
 template<class T1, class T2>
 struct SameType {
@@ -20,32 +24,37 @@ struct SameType<T, T> {
 	static const bool value = true;
 };
 
-#define ENTITY_DOES_NOT_HAVE_THIS_COMPONENT -1
 
-//template<class... Ts> class EntityRefMgr { };
-
+// EntityRefMgr
+// -----------------------------------
 
 template<class... Ts>
 class EntityRefMgr {
 public:
 	EntityRefMgr() : entity_component_indices(1) { }
-	
-	// Adding & removing entities
+
+
+	// Add & remove entities
+	// -----------------------------------
+
 	int addEntity() {
-		// An entity is just an entry in the sparse array of ComponentIndexSets
-		int e = entity_component_indices.add_entry({});
+		// An entity is just an entry in the sparse array of ComponentIndicess
+		size_t e = entity_component_indices.push({});
 		
 		for (int i=0, n = sizeof...(Ts); i < n; ++i) {
-			entity_component_indices.unsafe_ptr()[e].indices[i] = ENTITY_DOES_NOT_HAVE_THIS_COMPONENT;
+			entity_component_indices.v[e].indices[i] = ENTITY_DOES_NOT_HAVE_THIS_COMPONENT;
 		}
 		return e;
 	}
+
 	void removeEntity(int e) {
 		entity_component_indices.removeEntry(e);
 	}
 	
 	
-	// Adding & removing components for entities
+	// Add & remove components
+	// -----------------------------------
+
 	template <class C>
 	int addComponent(const C &c, int e) {
 		auto &arr = get_array<C>();
@@ -54,6 +63,7 @@ public:
 		setComponentIndexForEntity<C>(e, i);
 		return i;
 	}
+
 	template <class C>
 	void removeComponent(int comp_index, int e) {
 		auto &arr = get_array<C>();
@@ -63,13 +73,20 @@ public:
 			setComponentIndexForEntity<C>(arr[comp_index].entity, comp_index);
 		}
 	}
-	
-	// Get the array for the given type
+
+
+	// Get array, given component type
+	// -----------------------------------
+
 	template<class C>
 	StretchyArray<C, uint16_t>& get_array() {
 		return Tuple_Iterate<0, C, Det_Tuple_Of_Vecs<0, C>::value>::get(vvv);
 	}
-	// Get the index for the given type
+
+
+	// Get index of array, given component type
+	// -----------------------------------
+
 	template<class C>
 	int get_index() {
 		return Tuple_Iterate<0, C, Det_Tuple_Of_Vecs<0, C>::value>::get_index(vvv);
@@ -77,32 +94,35 @@ public:
 	
 	
 	// Helpers: Getting & setting component indices
+	// -----------------------------------
+
 	template<class C>
 	int componentIndexForEntity(int e) {
 		auto component_index = get_index<C>();
-		return entity_component_indices.unsafe_ptr()[e].indices[component_index];
+		return entity_component_indices.v[e].indices[component_index];
 	}
+
 	template<class C>
 	void setComponentIndexForEntity(int e, int i) {
 		auto component_index = get_index<C>();
-		auto &indices_for_entity = entity_component_indices.unsafe_ptr()[e];
+		auto &indices_for_entity = entity_component_indices.v[e];
 		indices_for_entity.indices[component_index] = i;
 	}
 
+
 private:
-	// Each component has an array
 	typedef std::tuple<StretchyArray<Ts, uint16_t>...> vecs;
 	vecs vvv;
-	
-	// ...and a space within ComponentIndexSet
-	struct ComponentIndexSet {
+
+	struct ComponentIndices {
 		int indices[sizeof...(Ts)];
 	};
-	SparseArray<ComponentIndexSet> entity_component_indices;
+	SparseArray<ComponentIndices> entity_component_indices;
 
 
-	// Use the template system to resolve the array for a given type
-	// at compile time
+	// Resolve array for given type at compile time
+	// -----------------------------------
+
 	template<int N, class U>
 	struct Det_Tuple_Of_Vecs : SameType<U, typename std::tuple_element<N, vecs>::type::value_type> { };
 
@@ -127,3 +147,4 @@ private:
 };
 
 #endif
+

@@ -26,8 +26,9 @@ public:
 	
 	EntityRef addEntity() {
 		EntityRef e = v.addEntry();
-		for (int i=0; i < Components::Count; ++i)
+		for (int i=0; i < Components::Count; ++i) {
 			v[e][i] = ENTITY_DOES_NOT_HAVE_THIS_COMPONENT;
+		}
 		printf("Added entity, now about %d of them\n", e);
 		return e;
 	}
