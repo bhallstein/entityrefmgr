@@ -1,0 +1,1 @@
+clang++ -std=c++11 -I ../SparseArray -I .. ./test.cpp && ./a.out
