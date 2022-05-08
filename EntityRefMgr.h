@@ -38,16 +38,19 @@ struct EntityRefMgr {
 
 	struct Entity {
 		size_t indices[sizeof...(Ts)];
+		size_t& operator[](size_t i) {
+			return indices[i];
+		}
 	};
 	SparseArray<Entity> entities;
 
 
 	size_t add_entity() {
-		size_t e = entities.push({});
+		Entity entity;
 		for (int i=0, n = sizeof...(Ts); i < n; ++i) {
-			entities.v[e].indices[i] = NotFound;
+			entity[i] = NotFound;
 		}
-		return e;
+		return entities.push(entity);
 	}
 
 
@@ -64,7 +67,6 @@ struct EntityRefMgr {
 	typedef std::tuple<std::vector<Ts>...> ComponentVectors;
 	ComponentVectors vvv;
 
-
 	template<class C>
 	std::vector<C>& get_component_vector() {
 		return Tuple_Iterate<0, C, Det_Tuple_Of_Component_Vectors<0, C>::value>::get(vvv);
@@ -76,66 +78,56 @@ struct EntityRefMgr {
 	}
 
 
-
-	// get & set entity's entries in component vectors
+	// get & set components
 	// -----------------------------------
 
 	template<class C>
-	C& entity__component(size_t e) {
-		const size_t i = entity__component_index<C>(e);
+	C& get_component(size_t e) {
+		const size_t i = get_component_index<C>(e);
 		return get_component_vector<C>()[i];
 	}
 
-	template<class C>
-	size_t entity__component_index(size_t e) {
-		auto component_index = index_of_component_vector<C>();
-		return entities.v[e].indices[component_index];
-	}
-
-	template<class C>
-	void entity__set_component_index(size_t e, size_t i) {
-		auto component_index = index_of_component_vector<C>();
-		entities.v[e].indices[component_index] = i;
-	}
-
-
-
-	// Add & remove components
-	// -----------------------------------
-
 	template <class C>
-	size_t entity__add_component(const C c, size_t e) {
+	size_t push_component(const C c, size_t e) {
 		auto &arr = get_component_vector<C>();
 		arr.push_back(c);
 		size_t i = arr.size() - 1;
-		entity__set_component_index<C>(e, i);
+		set_component_index<C>(e, i);
 		return i;
 	}
 
 	template <class C>
-	void entity__remove_component(size_t e) {
-		Entity &entity = entities.v[e];
+	void remove_component(size_t e) {
 		auto &v = get_component_vector<C>();
-		size_t vi = index_of_component_vector<C>();
-		size_t i = entity.indices[vi];
-
+		size_t i = get_component_index<C>(e);
 		size_t i__swapped = swap_remove<C>(v, i);
 
-		entity__set_component_index<C>(e, NotFound);
+		set_component_index<C>(e, NotFound);
 		if (i__swapped != i) {
-			entity__set_component_index<C>(v[i__swapped].entity, i);
+			set_component_index<C>(v[i__swapped].entity, i);
 		}
 	}
 
-	template <class C, class F>
-	void entity__remove_components(std::vector<size_t> entities, F f) {
-		for (int i = (int)entities.size() - 1; i >= 0; --i) {
-			size_t e = entities[i];
-			entity__remove_component<C>(e);
-			f(e);
+	template <class C>
+	void remove_components(std::vector<size_t> entities) {
+		for (size_t e : entities) {
+			remove_component<C>(e);
 		}
 	}
 
+	// generally only used internally by EntityRefMgr
+	template<class C>
+	size_t get_component_index(size_t e) {
+		auto component_index = index_of_component_vector<C>();
+		return entities[e][component_index];
+	}
+
+	// generally only used internally by EntityRefMgr
+	template<class C>
+	void set_component_index(size_t e, size_t i) {
+		auto component_index = index_of_component_vector<C>();
+		entities[e][component_index] = i;
+	}
 
 
 	// Resolve array for given type at compile time
@@ -165,4 +157,5 @@ struct EntityRefMgr {
 };
 
 #endif
+
 
